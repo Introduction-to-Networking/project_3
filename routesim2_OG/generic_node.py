@@ -8,7 +8,7 @@ class Generic_Node(Node):
 
     def __str__(self):
         return "A Generic Node: " + str(self.id) + "\n"
-
+    
     def link_has_been_updated(self, neighbor, latency):
         # latency = -1 if delete a link
         if latency == -1 and neighbor in self.neighbors:
