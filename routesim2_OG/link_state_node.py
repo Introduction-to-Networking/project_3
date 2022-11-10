@@ -195,11 +195,11 @@ class Link_State_Node(Node):
             # Send correction message
             self.send_to_neighbor(m['source'],json.dumps({'type':MESSAGE_TYPES[2],'source':self.id,'destination':m['source'],'data':correction_message}))
 
-        
+        source_neighbors = [n for n in self.local_graph[m['source']].keys()]
         if new_links or new_updates:
             # Send to all neighbors except the sender
-            for neighbor in self.local_graph.keys():
-                if neighbor != m['source']:
+            for neighbor in self.local_graph[self.id].keys():
+                if neighbor != m['source'] and neighbor not in source_neighbors:
                     self.send_to_neighbor(neighbor,json.dumps({'type':MESSAGE_TYPES[1],'source':self.id,'destination':neighbor,'data':self.link_states}))
             
     def process_correction_message(self,m):
@@ -207,7 +207,7 @@ class Link_State_Node(Node):
 
         for link in data.keys():
             self.update_local_db(link,data[link][-1][0],data[link][-1][1])
-        for neighbor in self.local_graph.keys():
+        for neighbor in self.local_graph[self.id].keys():
             if neighbor != m['source']:
                 self.send_to_neighbor(neighbor,json.dumps({'type':MESSAGE_TYPES[1],'source':self.id,'destination':neighbor,'data':self.link_states}))
 
