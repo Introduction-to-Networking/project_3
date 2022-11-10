@@ -126,6 +126,7 @@ class Link_State_Node(Node):
 
     def update_link_state(self,source,destination,latency, sequence_number=None):
         # Overwrite existing value if you see a higher sequence number!!!
+        source,destination = sorted([source,destination])
         link = "{} -> {}".format(source,destination)
         if link in self.link_states:
             old_latency,old_sequence_number = self.link_states[link][-1]
@@ -140,7 +141,7 @@ class Link_State_Node(Node):
 
             # this will execute if update was received from link_has_been_updated
             elif not sequence_number:
-                self.link_states[link].append((latency,old_sequence_number+self.get_time()))
+                self.link_states[link].append((latency,old_sequence_number+1))
         else:
             self.link_states[link] = [(latency,1)]
 
@@ -149,13 +150,15 @@ class Link_State_Node(Node):
         source, destination = [int(i) for i in link.split(' -> ')]
         self.update_local_graph(source, destination,latency)
         self.update_link_state(source, destination,latency,sequence_number)
-        self.update_link_state(destination, source,latency,sequence_number)
+        #self.update_link_state(destination, source,latency,sequence_number)
     # Fill in this function
     def link_has_been_updated(self, neighbor, latency):
         
         self.update_local_graph(self.id,neighbor,latency)
         self.update_link_state(self.id,neighbor,latency,None)
-        self.update_link_state(neighbor,self.id,latency,None)
+        #self.update_link_state(neighbor,self.id,latency,None)
+        source,destination = sorted([self.id,neighbor])
+        link = "{} -> {}".format(source,destination)
         self.send_to_neighbors(json.dumps({'type':MESSAGE_TYPES[1],'source':self.id,'destination':neighbor,'data':self.link_states}))
         pass
     
@@ -165,6 +168,7 @@ class Link_State_Node(Node):
         new_links = []
         common_links = []
         correction_message = {}
+        new_updates = {}
 
         for link in incoming_link_state.keys():
             if link not in self.link_states:
@@ -174,21 +178,24 @@ class Link_State_Node(Node):
         
         for link in new_links:
             self.update_local_db(link, incoming_link_state[link][-1][0],incoming_link_state[link][-1][1])
+            new_updates[link] = self.link_states[link]
+
         
-        new_updates = False
+        
         for link in common_links:
             my_latency,my_sequence_number = self.link_states[link][-1]
             incoming_latency,incoming_sequence_number = incoming_link_state[link][-1]
 
             # My sequence number is higher, send correction!
-            if my_sequence_number>incoming_sequence_number:
+            if my_sequence_number>incoming_sequence_number and incoming_latency!=my_latency:
                 correction_message[link] = self.link_states[link]
             elif incoming_sequence_number>my_sequence_number and my_latency==incoming_latency:
                 self.update_local_db(link, incoming_latency,incoming_sequence_number)
             # Incoming seq is higher, time to update!
             elif incoming_sequence_number>my_sequence_number and my_latency!=incoming_latency:
-                new_updates = True
                 self.update_local_db(link, incoming_latency,incoming_sequence_number)
+                new_updates[link] = self.link_states[link]
+
             # do nothing if its equal
         
         if correction_message:
@@ -199,17 +206,21 @@ class Link_State_Node(Node):
         if new_links or new_updates:
             # Send to all neighbors except the sender
             for neighbor in self.local_graph[self.id].keys():
-                if neighbor != m['source'] and neighbor not in source_neighbors:
-                    self.send_to_neighbor(neighbor,json.dumps({'type':MESSAGE_TYPES[1],'source':self.id,'destination':neighbor,'data':self.link_states}))
+                if neighbor != m['source']:
+                    self.send_to_neighbor(neighbor,json.dumps({'type':MESSAGE_TYPES[1],'source':self.id,'destination':neighbor,'data':new_updates}))
             
     def process_correction_message(self,m):
+        
         data = m['data']
 
         for link in data.keys():
             self.update_local_db(link,data[link][-1][0],data[link][-1][1])
-        for neighbor in self.local_graph[self.id].keys():
-            if neighbor != m['source']:
-                self.send_to_neighbor(neighbor,json.dumps({'type':MESSAGE_TYPES[1],'source':self.id,'destination':neighbor,'data':self.link_states}))
+        
+        # source_neighbors = [n for n in self.local_graph[m['source']].keys()]
+
+        # for neighbor in self.local_graph[self.id].keys():
+        #     if neighbor != m['source']:
+        #         self.send_to_neighbor(neighbor,json.dumps({'type':MESSAGE_TYPES[1],'source':self.id,'destination':neighbor,'data':self.link_states}))
 
     # Fill in this function
     def process_incoming_routing_message(self, m):
