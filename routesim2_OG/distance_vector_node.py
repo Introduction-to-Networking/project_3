@@ -1,6 +1,8 @@
 from simulator.node import Node
 import json
 
+# note: Case_8 and Case_10 events take a while to execute
+
 class Distance_Vector_Node(Node):
     def __init__(self, id):
         super().__init__(id)
